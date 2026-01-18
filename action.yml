@@ -7,7 +7,7 @@ branding:
 
 inputs:
   blup-version:
-    description: 'Version of blup to install (default: latest)'
+    description: 'Version of blup to install (e.g. "v0.0.7" or "latest")'
     required: false
     default: 'latest'
   blender-version:
@@ -22,43 +22,56 @@ runs:
   using: "composite"
   steps:
     # ----------------------------------------------------------------
-    # 1. Install blup
+    # 1. Install blup (Safe Mode: No Pipe)
     # ----------------------------------------------------------------
     - name: Install blup (Unix)
       if: runner.os != 'Windows'
       shell: bash
-      env:
-        BLUP_VERSION: ${{ inputs.blup-version }}
       run: |
-        if [ "$BLUP_VERSION" = "latest" ] || [ -z "$BLUP_VERSION" ]; then
-          URL="https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.sh"
+        set -euo pipefail
+        
+        v='${{ inputs.blup-version }}'
+        if [ "$v" = "latest" ] || [ -z "$v" ]; then
+          url='https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.sh'
         else
-          URL="https://github.com/unclepomedev/blup/releases/download/v${BLUP_VERSION}/blup-installer.sh"
+          url="https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.sh"
         fi
         
-        echo "Installing blup from: $URL"
-        curl --proto '=https' --tlsv1.2 -LsSf "$URL" | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        echo "Downloading installer from: $url"
+        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$url" -o blup-installer.sh
+        
+        chmod +x blup-installer.sh
+        ./blup-installer.sh
+        
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
     - name: Install blup (Windows)
       if: runner.os == 'Windows'
       shell: powershell
-      env:
-        BLUP_VERSION: ${{ inputs.blup-version }}
       run: |
-        $ver = $env:BLUP_VERSION
-        if ($ver -eq "latest" -or [string]::IsNullOrEmpty($ver)) {
-            $url = "https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.ps1"
+        $v = '${{ inputs.blup-version }}'
+        if ($v -eq 'latest' -or [string]::IsNullOrEmpty($v)) {
+          $url = 'https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.ps1'
         } else {
-            $url = "https://github.com/unclepomedev/blup/releases/download/v$ver/blup-installer.ps1"
+          $url = "https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.ps1"
+        }
+        
+        Write-Host "Downloading installer from: $url"
+        $dst = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
+        
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dst -ErrorAction Stop
+        } catch {
+            Write-Error "Failed to download blup installer from $url"
+            exit 1
         }
 
-        Write-Host "Installing blup from: $url"
-        powershell -ExecutionPolicy Bypass -c "irm $url | iex"
-        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & $dst
+        
+        "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
-    # 2. Determine Cache Paths (OS dependent)
+    # 2. Determine Cache Paths
     # ----------------------------------------------------------------
     - name: Set Cache Path Env (Linux)
       if: runner.os == 'Linux'
