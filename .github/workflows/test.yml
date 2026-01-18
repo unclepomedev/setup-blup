@@ -1,0 +1,56 @@
+name: Test Action
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['*.md']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['*.md']
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------------------------------------
+  # Job 1: CLI only
+  # -------------------------------------------------------------
+  test-cli-only:
+    name: Test CLI Install (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup blup (No Blender)
+        uses: ./
+        with:
+          blender-version: ''
+
+      - name: Verify blup version
+        run: blup --version
+
+  # -------------------------------------------------------------
+  # Job 2: All OS / Blender install + cache
+  # -------------------------------------------------------------
+  test-full-install:
+    name: Test Full Install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        blender-version: ['4.2.0']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup blup and Blender
+        uses: ./
+        with:
+          blender-version: ${{ matrix.blender-version }}
+          cache: true
+
+      - name: Verify Blender Path
+        run: blup which
+
+      - name: Verify Blender Execution
+        run: blup run -- --background --version
