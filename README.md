@@ -49,7 +49,7 @@ steps:
 | `blender-version` | The Blender version to install (e.g., `4.2.0`, `5.1`, `daily`). If empty, only `blup` is installed. | `''`     | No       |
 | `daily`           | Set to `true` to search for daily/experimental builds.                                              | `false`  | No       |
 | `cache`           | Enable caching for downloaded Blender binaries.                                                     | `true`   | No       |
-| `blup-version`    | Specific version of `blup` to use (e.g., `v0.0.9`). Defaults to the latest release.                 | `latest` | No       |
+| `blup-version`    | Specific version of `blup` to use (e.g., `v0.1.0`). Defaults to the latest release.                 | `latest` | No       |
 
 ## License
 
