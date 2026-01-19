@@ -13,7 +13,7 @@ Supports **Linux**, **Windows**, and **macOS**.
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
 
   - name: Setup Blender 4.5 LTS
     uses: unclepomedev/setup-blup@v0
@@ -29,7 +29,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
 
   # Install the latest Alpha/Beta version (e.g., matching '5.1')
   - name: Setup Blender Daily
