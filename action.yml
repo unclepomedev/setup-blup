@@ -122,7 +122,12 @@ runs:
           ARGS+=("--daily")
         fi
         
-        blup install "$BLENDER_VERSION" "${ARGS[@]}"
+        if [ ${#ARGS[@]} -gt 0 ]; then
+          blup install "$BLENDER_VERSION" "${ARGS[@]}"
+        else
+          blup install "$BLENDER_VERSION"
+        fi
+        
         LATEST_PATH=$(ls -td "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1)
         
         if [ -z "$LATEST_PATH" ]; then
