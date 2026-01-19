@@ -11,8 +11,12 @@ inputs:
     required: false
     default: 'latest'
   blender-version:
-    description: 'Blender version to install and set as default (e.g. "5.0.1", "daily"). If empty, only blup is installed.'
+    description: 'Blender version to install and set as default. If empty, only blup is installed.'
     required: false
+  daily:
+    description: 'Install from daily/experimental builds (adds --daily flag)'
+    required: false
+    default: 'false'
   cache:
     description: 'Enable caching for Blender binaries (true/false)'
     required: false
@@ -93,11 +97,11 @@ runs:
     # ----------------------------------------------------------------
     - name: Restore Blender Cache
       if: inputs.cache == 'true' && inputs.blender-version != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: blender-cache
       with:
         path: ${{ env.BLUP_CACHE_PATH }}
-        key: blup-blender-${{ runner.os }}-${{ inputs.blender-version }}
+        key: blup-blender-${{ runner.os }}-${{ inputs.blender-version }}-daily-${{ inputs.daily }}
         restore-keys: |
           blup-blender-${{ runner.os }}-
 
@@ -107,6 +111,14 @@ runs:
     - name: Install Requested Blender Version
       if: inputs.blender-version != ''
       shell: bash
+      env:
+        BLENDER_VERSION: ${{ inputs.blender-version }}
+        IS_DAILY: ${{ inputs.daily }}
       run: |
-        blup install ${{ inputs.blender-version }}
-        blup default ${{ inputs.blender-version }}
+        ARGS=""
+        if [ "$IS_DAILY" == "true" ]; then
+          ARGS="--daily"
+        fi
+        
+        blup install $BLENDER_VERSION $ARGS
+        blup default $BLENDER_VERSION
