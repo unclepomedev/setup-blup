@@ -11,7 +11,7 @@ inputs:
     required: false
     default: 'latest'
   blender-version:
-    description: 'Blender version to install and set as default. If empty, only blup is installed.'
+    description: 'Blender version to install. If empty, checks for .blender-version file.'
     required: false
   daily:
     description: 'Install from daily/experimental builds (adds --daily flag)'
@@ -64,7 +64,6 @@ runs:
             exit 1
         }
         
-        # Initialize exit code to success
         $LASTEXITCODE = 0
         & $dst
         if (-not $?) {
@@ -78,44 +77,77 @@ runs:
         "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
-    # 2. Determine Cache Paths
+    # 2. Determine Cache Paths & Resolve Version
     # ----------------------------------------------------------------
-    - name: Set Cache Path Env (Linux)
-      if: runner.os == 'Linux'
+    - name: Resolve Version and Cache Paths (Unix)
+      if: runner.os != 'Windows'
       shell: bash
-      run: echo "BLUP_CACHE_PATH=$HOME/.local/share/blup/versions" >> $GITHUB_ENV
+      run: |
+        # Set Cache Path
+        if [ "${{ runner.os }}" == "Linux" ]; then
+           echo "BLUP_CACHE_PATH=$HOME/.local/share/blup/versions" >> $GITHUB_ENV
+        elif [ "${{ runner.os }}" == "macOS" ]; then
+           echo "BLUP_CACHE_PATH=$HOME/Library/Application Support/blup/versions" >> $GITHUB_ENV
+        fi
 
-    - name: Set Cache Path Env (macOS)
-      if: runner.os == 'macOS'
-      shell: bash
-      run: echo "BLUP_CACHE_PATH=$HOME/Library/Application Support/blup/versions" >> $GITHUB_ENV
+        # Resolve Version using blup
+        RESOLVED=$(blup resolve ${{ inputs.blender-version }} 2>/dev/null || true)
+        
+        if [ -n "$RESOLVED" ]; then
+          echo "Detected version: $RESOLVED"
+          echo "RESOLVED_BLENDER_VERSION=$RESOLVED" >> $GITHUB_ENV
+        else
+          echo "No Blender version specified or found. Skipping installation."
+        fi
 
-    - name: Set Cache Path Env (Windows)
+    - name: Resolve Version and Cache Paths (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: echo "BLUP_CACHE_PATH=$env:LOCALAPPDATA\blup\versions" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      run: |
+        # Set Cache Path
+        echo "BLUP_CACHE_PATH=$env:LOCALAPPDATA\blup\versions" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+        # Resolve Version using blup
+        $resolved = $null
+        try {
+            $inputVer = "${{ inputs.blender-version }}"
+            if (-not [string]::IsNullOrEmpty($inputVer)) {
+                $resolved = blup resolve $inputVer
+            } else {
+                $resolved = blup resolve
+            }
+        } catch {
+            Write-Host "No version resolved via blup."
+        }
+
+        if (-not [string]::IsNullOrEmpty($resolved)) {
+            $resolved = $resolved.Trim()
+            Write-Host "Detected version: $resolved"
+            "RESOLVED_BLENDER_VERSION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        } else {
+            Write-Host "No Blender version specified or found. Skipping installation."
+        }
 
     # ----------------------------------------------------------------
     # 3. Cache Restore
     # ----------------------------------------------------------------
     - name: Restore Blender Cache
-      if: inputs.cache == 'true' && inputs.blender-version != ''
+      if: inputs.cache == 'true' && env.RESOLVED_BLENDER_VERSION != ''
       uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
       id: blender-cache
       with:
         path: ${{ env.BLUP_CACHE_PATH }}
-        key: blup-blender-${{ runner.os }}-${{ inputs.blender-version }}-daily-${{ inputs.daily }}
+        key: blup-blender-${{ runner.os }}-${{ env.RESOLVED_BLENDER_VERSION }}-daily-${{ inputs.daily }}
         restore-keys: |
           blup-blender-${{ runner.os }}-
 
     # ----------------------------------------------------------------
     # 4. Install & Set Default Blender
     # ----------------------------------------------------------------
-    - name: Install Requested Blender Version (Unix)
-      if: inputs.blender-version != '' && runner.os != 'Windows'
+    - name: Install Resolved Blender Version (Unix)
+      if: env.RESOLVED_BLENDER_VERSION != '' && runner.os != 'Windows'
       shell: bash
       env:
-        BLENDER_VERSION: ${{ inputs.blender-version }}
         IS_DAILY: ${{ inputs.daily }}
       run: |
         set -euo pipefail
@@ -125,19 +157,18 @@ runs:
           ARGS+=("--daily")
         fi
         
-        blup install "$BLENDER_VERSION" "${ARGS[@]}"
+        blup install "$RESOLVED_BLENDER_VERSION" "${ARGS[@]}"
 
-    - name: Install Requested Blender Version (Windows)
-      if: inputs.blender-version != '' && runner.os == 'Windows'
+    - name: Install Resolved Blender Version (Windows)
+      if: env.RESOLVED_BLENDER_VERSION != '' && runner.os == 'Windows'
       shell: pwsh
       env:
-        BLENDER_VERSION: ${{ inputs.blender-version }}
         IS_DAILY: ${{ inputs.daily }}
       run: |
-        $argsList = @("--default")
+        $argsList = @($env:RESOLVED_BLENDER_VERSION, "--default")
         if ($env:IS_DAILY -eq 'true') { $argsList += "--daily" }
         
-        & blup install $env:BLENDER_VERSION $argsList
+        & blup install $argsList
         
         if ($LASTEXITCODE -ne 0) {
           Write-Error "blup install failed with exit code $LASTEXITCODE"
