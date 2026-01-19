@@ -91,12 +91,21 @@ runs:
         fi
 
         # Resolve Version using blup
-        RESOLVED=$(blup resolve ${{ inputs.blender-version }} 2>/dev/null || true)
+        INPUT_VERSION="${{ inputs.blender-version }}"
+        if [ -n "$INPUT_VERSION" ]; then
+          RESOLVED=$(blup resolve "$INPUT_VERSION" 2>/dev/null || true)
+        else
+          RESOLVED=$(blup resolve 2>/dev/null || true)
+        fi
         
         if [ -n "$RESOLVED" ]; then
           echo "Detected version: $RESOLVED"
           echo "RESOLVED_BLENDER_VERSION=$RESOLVED" >> $GITHUB_ENV
         else
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "::error::Unable to resolve Blender version: $INPUT_VERSION"
+            exit 1
+          fi
           echo "No Blender version specified or found. Skipping installation."
         fi
 
@@ -109,8 +118,8 @@ runs:
 
         # Resolve Version using blup
         $resolved = $null
+        $inputVer = "${{ inputs.blender-version }}"
         try {
-            $inputVer = "${{ inputs.blender-version }}"
             if (-not [string]::IsNullOrEmpty($inputVer)) {
                 $resolved = blup resolve $inputVer
             } else {
@@ -124,6 +133,9 @@ runs:
             $resolved = $resolved.Trim()
             Write-Host "Detected version: $resolved"
             "RESOLVED_BLENDER_VERSION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        } elseif (-not [string]::IsNullOrEmpty($inputVer)) {
+            Write-Error "Unable to resolve Blender version: $inputVer"
+            exit 1
         } else {
             Write-Host "No Blender version specified or found. Skipping installation."
         }
