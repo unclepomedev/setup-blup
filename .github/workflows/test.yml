@@ -36,21 +36,37 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        blender-version: ['5.0.0']
+        blender-version: ['4.2.0', '5.0.0']
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup blup and Blender
+      - name: Setup Blender ${{ matrix.blender-version }}
         uses: ./
         with:
           blender-version: ${{ matrix.blender-version }}
           cache: true
 
-      - name: Verify Blender Path
-        run: blup which
+      - name: Verify Execution
+        run: blup run -- --background --version
 
-      - name: Verify Blender Execution
+  # -------------------------------------------------------------
+  # Job 3: daily: true
+  # -------------------------------------------------------------
+  test-daily:
+    name: Test Daily Flag (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Blender Daily
+        uses: ./
+        with:
+          blender-version: 'daily'
+          daily: 'true'
+          cache: true
+
+      - name: Verify Execution
         run: blup run -- --background --version

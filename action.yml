@@ -7,12 +7,16 @@ branding:
 
 inputs:
   blup-version:
-    description: 'Version of blup to install (e.g. "v0.0.8" or "latest")'
+    description: 'Version of blup to install (e.g. "v0.1.0" or "latest")'
     required: false
     default: 'latest'
   blender-version:
-    description: 'Blender version to install and set as default (e.g. "5.0.1", "daily"). If empty, only blup is installed.'
+    description: 'Blender version to install and set as default. If empty, only blup is installed.'
     required: false
+  daily:
+    description: 'Install from daily/experimental builds (adds --daily flag)'
+    required: false
+    default: 'false'
   cache:
     description: 'Enable caching for Blender binaries (true/false)'
     required: false
@@ -22,32 +26,28 @@ runs:
   using: "composite"
   steps:
     # ----------------------------------------------------------------
-    # 1. Install blup (Safe Mode: No Pipe)
+    # 1. Install blup
     # ----------------------------------------------------------------
     - name: Install blup (Unix)
       if: runner.os != 'Windows'
       shell: bash
       run: |
         set -euo pipefail
-        
         v='${{ inputs.blup-version }}'
         if [ "$v" = "latest" ] || [ -z "$v" ]; then
           url='https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.sh'
         else
           url="https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.sh"
         fi
-        
         echo "Downloading installer from: $url"
         curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$url" -o blup-installer.sh
-        
         chmod +x blup-installer.sh
         ./blup-installer.sh
-        
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
     - name: Install blup (Windows)
       if: runner.os == 'Windows'
-      shell: powershell
+      shell: pwsh
       run: |
         $v = '${{ inputs.blup-version }}'
         if ($v -eq 'latest' -or [string]::IsNullOrEmpty($v)) {
@@ -55,19 +55,26 @@ runs:
         } else {
           $url = "https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.ps1"
         }
-        
-        Write-Host "Downloading installer from: $url"
+        echo "Downloading installer from: $url"
         $dst = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
-        
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dst -ErrorAction Stop
+            Invoke-WebRequest -Uri $url -OutFile $dst -ErrorAction Stop
         } catch {
             Write-Error "Failed to download blup installer from $url"
             exit 1
         }
-
-        & $dst
         
+        # Initialize exit code to success
+        $LASTEXITCODE = 0
+        & $dst
+        if (-not $?) {
+          Write-Error "blup installer script failed (PowerShell execution error)"
+          exit 1
+        }
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "blup installer failed with exit code $LASTEXITCODE"
+          exit $LASTEXITCODE
+        }
         "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
@@ -85,7 +92,7 @@ runs:
 
     - name: Set Cache Path Env (Windows)
       if: runner.os == 'Windows'
-      shell: powershell
+      shell: pwsh
       run: echo "BLUP_CACHE_PATH=$env:LOCALAPPDATA\blup\versions" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
@@ -93,20 +100,46 @@ runs:
     # ----------------------------------------------------------------
     - name: Restore Blender Cache
       if: inputs.cache == 'true' && inputs.blender-version != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: blender-cache
       with:
         path: ${{ env.BLUP_CACHE_PATH }}
-        key: blup-blender-${{ runner.os }}-${{ inputs.blender-version }}
+        key: blup-blender-${{ runner.os }}-${{ inputs.blender-version }}-daily-${{ inputs.daily }}
         restore-keys: |
           blup-blender-${{ runner.os }}-
 
     # ----------------------------------------------------------------
     # 4. Install & Set Default Blender
     # ----------------------------------------------------------------
-    - name: Install Requested Blender Version
-      if: inputs.blender-version != ''
+    - name: Install Requested Blender Version (Unix)
+      if: inputs.blender-version != '' && runner.os != 'Windows'
       shell: bash
+      env:
+        BLENDER_VERSION: ${{ inputs.blender-version }}
+        IS_DAILY: ${{ inputs.daily }}
       run: |
-        blup install ${{ inputs.blender-version }}
-        blup default ${{ inputs.blender-version }}
+        set -euo pipefail
+        
+        ARGS=("--default")
+        if [ "$IS_DAILY" == "true" ]; then
+          ARGS+=("--daily")
+        fi
+        
+        blup install "$BLENDER_VERSION" "${ARGS[@]}"
+
+    - name: Install Requested Blender Version (Windows)
+      if: inputs.blender-version != '' && runner.os == 'Windows'
+      shell: pwsh
+      env:
+        BLENDER_VERSION: ${{ inputs.blender-version }}
+        IS_DAILY: ${{ inputs.daily }}
+      run: |
+        $argsList = @("--default")
+        if ($env:IS_DAILY -eq 'true') { $argsList += "--daily" }
+        
+        & blup install $env:BLENDER_VERSION $argsList
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "blup install failed with exit code $LASTEXITCODE"
+          exit $LASTEXITCODE
+        }
