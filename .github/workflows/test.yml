@@ -70,3 +70,33 @@ jobs:
 
       - name: Verify Execution
         run: blup run -- --background --version
+
+  # -------------------------------------------------------------
+  # Job 4: .blender-version detection
+  # -------------------------------------------------------------
+  test-file-detection:
+    name: Test .blender-version File Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Create .blender-version file
+        run: echo "4.5.0" > .blender-version
+
+      - name: Setup blup (Auto-detect)
+        uses: ./
+        with:
+          cache: true
+
+      - name: Verify Auto-detection
+        shell: bash
+        run: |
+          DETECTED=$(blup resolve)
+          echo "Detected version: $DETECTED"
+          
+          if [ "$DETECTED" != "4.5.0" ]; then
+            echo "::error::Auto-detection failed. Expected 4.5.0, got $DETECTED"
+            exit 1
+          fi
+
+          blup run -- --background --version
