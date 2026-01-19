@@ -115,15 +115,20 @@ runs:
         BLENDER_VERSION: ${{ inputs.blender-version }}
         IS_DAILY: ${{ inputs.daily }}
       run: |
-        ARGS=""
+        ARGS=()
         if [ "$IS_DAILY" == "true" ]; then
-          ARGS="--daily"
+          ARGS+=("--daily")
         fi
         
-        blup install $BLENDER_VERSION $ARGS
-        INSTALLED_NAME=$(ls -t "$BLUP_CACHE_PATH" | head -n1)
-        echo "Resolved installed version: $INSTALLED_NAME"
+        blup install "$BLENDER_VERSION" "${ARGS[@]}"
+        INSTALLED_NAME=$(ls -d -t "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1 | xargs basename)
         
+        if [ -z "$INSTALLED_NAME" ]; then
+          echo "Error: No installed version found in $BLUP_CACHE_PATH"
+          exit 1
+        fi
+        
+        echo "Resolved installed version: $INSTALLED_NAME"
         blup default "$INSTALLED_NAME"
 
     # ----------------------------------------------------------------
@@ -141,6 +146,11 @@ runs:
         
         & blup install $env:BLENDER_VERSION $argsList
         $latest = Get-ChildItem -Path "$env:BLUP_CACHE_PATH" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        Write-Host "Resolved installed version: $($latest.Name)"
         
+        if ($null -eq $latest) {
+            Write-Error "Error: No installed version found in $env:BLUP_CACHE_PATH"
+            exit 1
+        }
+
+        Write-Host "Resolved installed version: $($latest.Name)"
         blup default $latest.Name
