@@ -7,7 +7,7 @@ branding:
 
 inputs:
   blup-version:
-    description: 'Version of blup to install (e.g. "v0.0.8" or "latest")'
+    description: 'Version of blup to install (e.g. "v0.0.9" or "latest")'
     required: false
     default: 'latest'
   blender-version:
@@ -115,6 +115,8 @@ runs:
         BLENDER_VERSION: ${{ inputs.blender-version }}
         IS_DAILY: ${{ inputs.daily }}
       run: |
+        set -euo pipefail
+        
         ARGS=()
         if [ "$IS_DAILY" == "true" ]; then
           ARGS+=("--daily")
@@ -146,6 +148,10 @@ runs:
         if ($env:IS_DAILY -eq 'true') { $argsList += "--daily" }
         
         & blup install $env:BLENDER_VERSION $argsList
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "blup install failed with exit code $LASTEXITCODE"
+          exit $LASTEXITCODE
+        }
         $latest = Get-ChildItem -Path "$env:BLUP_CACHE_PATH" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         
         if ($null -eq $latest) {
