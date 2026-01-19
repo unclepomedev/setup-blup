@@ -26,27 +26,23 @@ runs:
   using: "composite"
   steps:
     # ----------------------------------------------------------------
-    # 1. Install blup (Safe Mode: No Pipe)
+    # 1. Install blup
     # ----------------------------------------------------------------
     - name: Install blup (Unix)
       if: runner.os != 'Windows'
       shell: bash
       run: |
         set -euo pipefail
-        
         v='${{ inputs.blup-version }}'
         if [ "$v" = "latest" ] || [ -z "$v" ]; then
           url='https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.sh'
         else
           url="https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.sh"
         fi
-        
         echo "Downloading installer from: $url"
         curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$url" -o blup-installer.sh
-        
         chmod +x blup-installer.sh
         ./blup-installer.sh
-        
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
     - name: Install blup (Windows)
@@ -59,23 +55,22 @@ runs:
         } else {
           $url = "https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.ps1"
         }
-        
-        Write-Host "Downloading installer from: $url"
+        echo "Downloading installer from: $url"
         $dst = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
-        
         try {
             Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dst -ErrorAction Stop
         } catch {
             Write-Error "Failed to download blup installer from $url"
             exit 1
         }
-
+        
+        # Initialize exit code to success
+        $LASTEXITCODE = 0
         & $dst
         if ($LASTEXITCODE -ne 0) {
           Write-Error "blup installer failed with exit code $LASTEXITCODE"
           exit $LASTEXITCODE
         }
-        
         "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
@@ -110,7 +105,7 @@ runs:
           blup-blender-${{ runner.os }}-
 
     # ----------------------------------------------------------------
-    # 4. Install & Set Default Blender (Unix)
+    # 4. Install & Set Default Blender
     # ----------------------------------------------------------------
     - name: Install Requested Blender Version (Unix)
       if: inputs.blender-version != '' && runner.os != 'Windows'
@@ -121,31 +116,13 @@ runs:
       run: |
         set -euo pipefail
         
-        ARGS=()
+        ARGS=("--default")
         if [ "$IS_DAILY" == "true" ]; then
           ARGS+=("--daily")
         fi
         
-        if [ ${#ARGS[@]} -gt 0 ]; then
-          blup install "$BLENDER_VERSION" "${ARGS[@]}"
-        else
-          blup install "$BLENDER_VERSION"
-        fi
-        
-        LATEST_PATH=$(ls -td "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1 || true)
-        
-        if [ -z "$LATEST_PATH" ]; then
-          echo "Error: No installed version found in $BLUP_CACHE_PATH"
-          exit 1
-        fi
-        
-        INSTALLED_NAME=$(basename "$LATEST_PATH")
-        echo "Resolved installed version: $INSTALLED_NAME"
-        blup default "$INSTALLED_NAME"
+        blup install "$BLENDER_VERSION" "${ARGS[@]}"
 
-    # ----------------------------------------------------------------
-    # 4. Install & Set Default Blender (Windows)
-    # ----------------------------------------------------------------
     - name: Install Requested Blender Version (Windows)
       if: inputs.blender-version != '' && runner.os == 'Windows'
       shell: pwsh
@@ -153,24 +130,12 @@ runs:
         BLENDER_VERSION: ${{ inputs.blender-version }}
         IS_DAILY: ${{ inputs.daily }}
       run: |
-        $argsList = @()
+        $argsList = @("--default")
         if ($env:IS_DAILY -eq 'true') { $argsList += "--daily" }
         
         & blup install $env:BLENDER_VERSION $argsList
+        
         if ($LASTEXITCODE -ne 0) {
           Write-Error "blup install failed with exit code $LASTEXITCODE"
-          exit $LASTEXITCODE
-        }
-        $latest = Get-ChildItem -Path "$env:BLUP_CACHE_PATH" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        
-        if ($null -eq $latest) {
-            Write-Error "Error: No installed version found in $env:BLUP_CACHE_PATH"
-            exit 1
-        }
-
-        Write-Host "Resolved installed version: $($latest.Name)"
-        & blup default $latest.Name
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "blup default failed with exit code $LASTEXITCODE"
           exit $LASTEXITCODE
         }
