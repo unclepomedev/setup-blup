@@ -58,7 +58,7 @@ runs:
         echo "Downloading installer from: $url"
         $dst = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dst -ErrorAction Stop
+            Invoke-WebRequest -Uri $url -OutFile $dst -ErrorAction Stop
         } catch {
             Write-Error "Failed to download blup installer from $url"
             exit 1
