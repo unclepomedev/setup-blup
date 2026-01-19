@@ -128,7 +128,7 @@ runs:
           blup install "$BLENDER_VERSION"
         fi
         
-        LATEST_PATH=$(ls -td "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1)
+        LATEST_PATH=$(ls -td "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1 || true)
         
         if [ -z "$LATEST_PATH" ]; then
           echo "Error: No installed version found in $BLUP_CACHE_PATH"
