@@ -67,6 +67,10 @@ runs:
         # Initialize exit code to success
         $LASTEXITCODE = 0
         & $dst
+        if (-not $?) {
+          Write-Error "blup installer script failed (PowerShell execution error)"
+          exit 1
+        }
         if ($LASTEXITCODE -ne 0) {
           Write-Error "blup installer failed with exit code $LASTEXITCODE"
           exit $LASTEXITCODE
