@@ -51,7 +51,7 @@ runs:
 
     - name: Install blup (Windows)
       if: runner.os == 'Windows'
-      shell: powershell
+      shell: pwsh
       run: |
         $v = '${{ inputs.blup-version }}'
         if ($v -eq 'latest' -or [string]::IsNullOrEmpty($v)) {
@@ -89,7 +89,7 @@ runs:
 
     - name: Set Cache Path Env (Windows)
       if: runner.os == 'Windows'
-      shell: powershell
+      shell: pwsh
       run: echo "BLUP_CACHE_PATH=$env:LOCALAPPDATA\blup\versions" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     # ----------------------------------------------------------------
@@ -106,10 +106,10 @@ runs:
           blup-blender-${{ runner.os }}-
 
     # ----------------------------------------------------------------
-    # 4. Install & Set Default Blender
+    # 4. Install & Set Default Blender (Unix)
     # ----------------------------------------------------------------
-    - name: Install Requested Blender Version
-      if: inputs.blender-version != ''
+    - name: Install Requested Blender Version (Unix)
+      if: inputs.blender-version != '' && runner.os != 'Windows'
       shell: bash
       env:
         BLENDER_VERSION: ${{ inputs.blender-version }}
@@ -121,4 +121,26 @@ runs:
         fi
         
         blup install $BLENDER_VERSION $ARGS
-        blup default $BLENDER_VERSION
+        INSTALLED_NAME=$(ls -t "$BLUP_CACHE_PATH" | head -n1)
+        echo "Resolved installed version: $INSTALLED_NAME"
+        
+        blup default "$INSTALLED_NAME"
+
+    # ----------------------------------------------------------------
+    # 4. Install & Set Default Blender (Windows)
+    # ----------------------------------------------------------------
+    - name: Install Requested Blender Version (Windows)
+      if: inputs.blender-version != '' && runner.os == 'Windows'
+      shell: pwsh
+      env:
+        BLENDER_VERSION: ${{ inputs.blender-version }}
+        IS_DAILY: ${{ inputs.daily }}
+      run: |
+        $argsList = @()
+        if ($env:IS_DAILY -eq 'true') { $argsList += "--daily" }
+        
+        & blup install $env:BLENDER_VERSION $argsList
+        $latest = Get-ChildItem -Path "$env:BLUP_CACHE_PATH" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        Write-Host "Resolved installed version: $($latest.Name)"
+        
+        blup default $latest.Name
