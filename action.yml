@@ -71,6 +71,10 @@ runs:
         }
 
         & $dst
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "blup installer failed with exit code $LASTEXITCODE"
+          exit $LASTEXITCODE
+        }
         
         "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
@@ -165,4 +169,8 @@ runs:
         }
 
         Write-Host "Resolved installed version: $($latest.Name)"
-        blup default $latest.Name
+        & blup default $latest.Name
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "blup default failed with exit code $LASTEXITCODE"
+          exit $LASTEXITCODE
+        }
