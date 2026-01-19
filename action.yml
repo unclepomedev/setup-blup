@@ -100,7 +100,7 @@ runs:
     # ----------------------------------------------------------------
     - name: Restore Blender Cache
       if: inputs.cache == 'true' && inputs.blender-version != ''
-      uses: actions/cache@v5
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
       id: blender-cache
       with:
         path: ${{ env.BLUP_CACHE_PATH }}
