@@ -121,13 +121,14 @@ runs:
         fi
         
         blup install "$BLENDER_VERSION" "${ARGS[@]}"
-        INSTALLED_NAME=$(ls -d -t "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1 | xargs basename)
+        LATEST_PATH=$(ls -td "$BLUP_CACHE_PATH"/*/ 2>/dev/null | head -n 1)
         
-        if [ -z "$INSTALLED_NAME" ]; then
+        if [ -z "$LATEST_PATH" ]; then
           echo "Error: No installed version found in $BLUP_CACHE_PATH"
           exit 1
         fi
         
+        INSTALLED_NAME=$(basename "$LATEST_PATH")
         echo "Resolved installed version: $INSTALLED_NAME"
         blup default "$INSTALLED_NAME"
 
