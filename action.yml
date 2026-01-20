@@ -1,5 +1,5 @@
 name: 'Setup blup (Blender Version Manager)'
-description: 'Install blup and manage Blender versions with caching support.'
+description: 'Install blup and manage Blender versions with built-in caching and security check.'
 author: 'unclepomedev'
 branding:
   icon: 'box'
@@ -35,12 +35,32 @@ runs:
         set -euo pipefail
         v='${{ inputs.blup-version }}'
         if [ "$v" = "latest" ] || [ -z "$v" ]; then
-          url='https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.sh'
+          base_url='https://github.com/unclepomedev/blup/releases/latest/download'
         else
-          url="https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.sh"
+          base_url="https://github.com/unclepomedev/blup/releases/download/$v"
         fi
-        echo "Downloading installer from: $url"
-        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$url" -o blup-installer.sh
+        
+        script_url="${base_url}/blup-installer.sh"
+        checksum_url="${base_url}/blup-installer.sh.sha256"
+        
+        echo "Downloading installer and checksum..."
+        echo "  Script: $script_url"
+        
+        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$script_url" -o blup-installer.sh
+        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-connrefused "$checksum_url" -o blup-installer.sh.sha256
+        
+        echo "Verifying checksum..."
+        # sha256sum (Linux) or shasum (macOS)
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum -c blup-installer.sh.sha256
+        elif command -v shasum >/dev/null 2>&1; then
+          shasum -a 256 -c blup-installer.sh.sha256
+        else
+          echo "::error::Neither sha256sum nor shasum found for verification."
+          exit 1
+        fi
+        
+        echo "Checksum verified. Executing installer..."
         chmod +x blup-installer.sh
         ./blup-installer.sh
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -51,21 +71,43 @@ runs:
       run: |
         $v = '${{ inputs.blup-version }}'
         if ($v -eq 'latest' -or [string]::IsNullOrEmpty($v)) {
-          $url = 'https://github.com/unclepomedev/blup/releases/latest/download/blup-installer.ps1'
+          $baseUrl = 'https://github.com/unclepomedev/blup/releases/latest/download'
         } else {
-          $url = "https://github.com/unclepomedev/blup/releases/download/$v/blup-installer.ps1"
+          $baseUrl = "https://github.com/unclepomedev/blup/releases/download/$v"
         }
-        echo "Downloading installer from: $url"
-        $dst = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
+        
+        $scriptUrl = "$baseUrl/blup-installer.ps1"
+        $checksumUrl = "$baseUrl/blup-installer.ps1.sha256"
+        
+        $scriptPath = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1'
+        $checksumPath = Join-Path $env:RUNNER_TEMP 'blup-installer.ps1.sha256'
+        
+        Write-Host "Downloading installer and checksum..."
         try {
-            Invoke-WebRequest -Uri $url -OutFile $dst -ErrorAction Stop
+            Invoke-WebRequest -Uri $scriptUrl -OutFile $scriptPath -ErrorAction Stop
+            Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath -ErrorAction Stop
         } catch {
-            Write-Error "Failed to download blup installer from $url"
+            Write-Error "Failed to download blup installer or checksum from $baseUrl"
             exit 1
         }
         
+        Write-Host "Verifying checksum..."
+        $checksumContent = Get-Content -Path $checksumPath -Raw
+        $expectedHash = ($checksumContent -split '\s+')[0].Trim()
+        
+        $computedHash = (Get-FileHash -Path $scriptPath -Algorithm SHA256).Hash
+        
+        if ($expectedHash.ToLower() -ne $computedHash.ToLower()) {
+             Write-Error "Checksum verification failed!"
+             Write-Error "Expected: $expectedHash"
+             Write-Error "Computed: $computedHash"
+             exit 1
+        }
+        
+        Write-Host "Checksum verified. Executing installer..."
+        
         $LASTEXITCODE = 0
-        & $dst
+        & $scriptPath
         if (-not $?) {
           Write-Error "blup installer script failed (PowerShell execution error)"
           exit 1
